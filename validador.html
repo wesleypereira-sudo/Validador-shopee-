@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Validador Rodízio — Shopee Style (Patch Assignment Match)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --shopee-orange:#EE4D2D;
+      --bg:#F7F7FA;
+      --card:#FFFFFF;
+      --text:#222;
+      --muted:#6B6B6B;
+      --success:#2EA44F;
+      --info:#0B76EF;
+      --danger:#E53935;
+      --neutral:#9E9E9E;
+      --radius:10px;
+      --shadow: 0 8px 22px rgba(16,26,50,0.06);
+      --max-height: calc(100vh - 260px);
+    }
+    html,body{height:100%;margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:var(--text)}
+    .topbar{display:flex;align-items:center;gap:16px;padding:12px 20px;background:#fff;border-bottom:1px solid #f0f0f2;position:sticky;top:0;z-index:5}
+    .logo{height:44px}
+    .title{font-size:18px;font-weight:700}
+    .subtitle{color:var(--muted);font-size:13px}
+    .content{width:100%;padding:18px 24px;box-sizing:border-box}
+    .card{background:var(--card);border-radius:10px;box-shadow:var(--shadow);padding:12px;margin-bottom:12px}
+    .imports-row{display:flex;gap:12px;flex-wrap:wrap}
+    .upload-card{flex:1 1 23%;min-width:220px;padding:12px;border-radius:10px;border:1px solid #f0f0f2;background:#fff;display:flex;flex-direction:column;gap:8px}
+    .upload-card strong{display:block;margin-bottom:6px}
+    .small{font-size:13px;color:var(--muted)}
+    input[type=file]{width:100%}
+    button{background:var(--shopee-orange);color:white;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:700}
+    button.secondary{background:white;color:var(--text);border:1px solid #eee}
+    .badge{background:var(--shopee-orange);color:#fff;padding:6px 8px;border-radius:8px;font-weight:700}
+    .log{font-size:12px;color:var(--muted);margin-top:8px;background:#FAFAFC;padding:10px;border-radius:8px;max-height:120px;overflow:auto}
+    .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+    .select,.input{padding:8px;border-radius:8px;border:1px solid #E8E8EA;background:white;min-width:150px}
+    .btns-right{margin-left:auto;display:flex;gap:8px}
+    .table-wrap{overflow:auto;background:#fff;border-radius:8px;padding:8px;border:1px solid #f0f0f2}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead th{position:sticky;top:0;background:#fff;z-index:2;padding:8px;border-bottom:1px solid #eee}
+    th,td{padding:8px;border-bottom:1px solid #f3f3f3;text-align:left;vertical-align:middle}
+    td.chips{white-space:nowrap}
+    .chip{display:inline-block;padding:5px 9px;border-radius:999px;font-size:12px;margin-right:6px}
+    .chip.blue{background:#E8F0FF;color:var(--info);border:1px solid rgba(11,118,239,0.08)}
+    .chip.green{background:#EAF8EE;color:var(--success);border:1px solid rgba(46,164,79,0.08)}
+    .chip.red{background:#FFECEC;color:var(--danger);border:1px solid rgba(229,57,53,0.08)}
+    .chip.gray{background:#F3F4F6;color:var(--neutral);border:1px solid rgba(0,0,0,0.03)}
+    .chip.more{background:#F5F5F5;color:var(--muted)}
+    .whatsapp{display:inline-block;padding:6px 8px;border-radius:6px;text-decoration:none;font-weight:700}
+    .wh-green{background:#25D366;color:white}
+    .empty{padding:20px;color:var(--muted);text-align:center}
+    .row-count{font-size:13px;color:var(--muted);margin-left:8px}
+    .footer-note{font-size:12px;color:var(--muted);text-align:right;margin-top:6px}
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <img class="logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Shopee_logo.svg/512px-Shopee_logo.svg.png" alt="Logo" />
+    <div>
+      <div class="title">Validador / Rodízio — Painel</div>
+      <div class="subtitle">Importe 4 arquivos (.xlsx). Processamento local (offline).</div>
+    </div>
+    <div style="margin-left:auto" class="badge" id="status-pill">Sem arquivos</div>
+  </div>
+
+  <div class="content">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <strong>1 • Importação</strong>
+        <div class="small">Carregue os arquivos abaixo (cada usuário faz seu upload localmente).</div>
+        <div class="btns-right" style="margin-left:auto">
+          <button id="btn-process">Gerar Resumo</button>
+          <button id="btn-clear" class="secondary">Limpar arquivos</button>
+        </div>
+      </div>
+
+      <div class="imports-row" style="margin-top:12px">
+        <div class="upload-card card">
+          <strong>Drivers</strong>
+          <div class="small">Drivers</div>
+          <input id="file-profile" type="file" accept=".xlsx" />
+        </div>
+
+        <div class="upload-card card">
+          <strong>Disponibilidades</strong>
+          <div class="small">Disponibilidades</div>
+          <input id="file-availability" type="file" accept=".xlsx" />
+        </div>
+
+        <div class="upload-card card">
+          <strong>Atribuição</strong>
+          <div class="small">Atribuição</div>
+          <input id="file-assignment" type="file" accept=".xlsx" />
+        </div>
+
+        <div class="upload-card card">
+          <strong>Call UP</strong>
+          <div class="small">Call UP</div>
+          <input id="file-callup" type="file" accept=".xlsx" />
+        </div>
+      </div>
+
+      <div class="log" id="log">Logs aparecerão aqui.</div>
+    </div>
+
+    <div class="card" id="summary-card" style="display:none">
+      <div style="display:flex;align-items:center;gap:12px">
+        <strong>2 • Resumo / Validador</strong>
+        <div class="small">Base: DISPONIBILIDADE — todos os drivers listados aqui.</div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <button id="btn-export">Exportar Excel</button>
+          <button id="btn-back" class="secondary">Voltar</button>
+        </div>
+      </div>
+
+      <div class="filters" style="margin-top:12px">
+        <select id="filter-cluster1" class="select"><option value="">Cluster 1 (Todos)</option></select>
+        <select id="filter-spx" class="select"><option value="">SPX Status (Todos)</option></select>
+        <select id="filter-assign" class="select"><option value="">Status Atribuição (Todos)</option></select>
+        <select id="filter-dispo" class="select"><option value="">Disponibilidade</option><option value="ESCALADO">ESCALADO</option><option value="DISPONÍVEL S/ ESCALA">DISPONÍVEL S/ ESCALA</option><option value="NÃO DISPONÍVEL">NÃO DISPONÍVEL</option><option value="NOK">NOK</option></select>
+        <select id="filter-vehicle" class="select"><option value="">Vehicle Type</option></select>
+        <select id="filter-task" class="select"><option value="">Task</option><option value="has">Tem Task</option><option value="no">Sem Task</option></select>
+        <select id="filter-turno" class="select"><option value="">Turno (Todos)</option></select>
+        <input id="search-name" class="input" placeholder="Buscar nome..." />
+        <input id="search-id" class="input" placeholder="Buscar Driver ID..." />
+        <button id="btn-clear-filters" class="secondary">Limpar filtros</button>
+        <div class="row-count" id="row-count">Linhas: 0</div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:12px;max-height:var(--max-height);overflow:auto">
+        <table id="result-table">
+          <thead>
+            <tr>
+              <th style="min-width:120px">Driver ID</th>
+              <th style="min-width:200px">Driver Name</th>
+              <th style="min-width:120px">Vehicle Type</th>
+              <th style="min-width:120px">Phone</th>
+              <th style="min-width:140px">SPX Status</th>
+              <th style="min-width:120px">Task ID</th>
+              <th style="min-width:140px">Corridor/Cage</th>
+              <th>Cluster_1</th>
+              <th>Cluster_2</th>
+              <th>Cluster_3</th>
+              <th>Cluster_4</th>
+              <th style="min-width:220px">Turno</th>
+              <th style="min-width:140px">Disponibilidade</th>
+              <th style="min-width:160px">Status Atribuição</th>
+              <th style="min-width:160px">Decline Reason</th>
+              <th style="min-width:120px">CallUp Status</th>
+            </tr>
+          </thead>
+          <tbody id="result-body"></tbody>
+        </table>
+      </div>
+
+      <div id="empty-note" class="empty" style="display:none">Nenhuma linha encontrada com os filtros aplicados.</div>
+      <div class="footer-note">Desenvolvido por Wesley Pereira — Fleet-SPI</div>
+    </div>
+  </div>
+
+<script>
+function log(msg){ const el=document.getElementById('log'); el.innerText = (new Date()).toLocaleTimeString() + ' — ' + msg + '\n' + el.innerText; }
+function safe(v){ return v===undefined||v===null? '': String(v).trim(); }
+function normalizeName(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase(); }
+function whatsappLink(phone,name){
+  const num = String(phone||'').replace(/[^0-9]/g,'');
+  if(!num) return '#';
+  const msg = encodeURIComponent('Olá ' + (name||'') + ', você recebeu uma Oferta para Carregar Hoje. Confirme presença, por favor.');
+  return 'https://wa.me/' + num + '?text=' + msg;
+}
+
+function parseFileToAOA(file, cb){
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = e.target.result;
+    const wb = XLSX.read(data,{type:'array'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    cb(aoa);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+let profileAOA=null, availAOA=null, assignAOA=null, callupAOA=null;
+let finalRows = [];
+window.__VAL_LAST_RENDERED = [];
+
+document.getElementById('file-profile').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  parseFileToAOA(f, aoa=>{ profileAOA = aoa; log('Drivers carregado — linhas: ' + aoa.length); updateStatus(); });
+});
+document.getElementById('file-availability').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  parseFileToAOA(f, aoa=>{ availAOA = aoa; log('Disponibilidades carregado — linhas: ' + aoa.length); updateStatus(); });
+});
+document.getElementById('file-assignment').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  parseFileToAOA(f, aoa=>{ assignAOA = aoa; log('Atribuição carregado — linhas: ' + aoa.length); updateStatus(); });
+});
+document.getElementById('file-callup').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  parseFileToAOA(f, aoa=>{ callupAOA = aoa; log('Call UP carregado — linhas: ' + aoa.length); updateStatus(); });
+});
+
+document.getElementById('btn-clear').addEventListener('click', ()=>{
+  profileAOA=availAOA=assignAOA=callupAOA=null;
+  document.getElementById('file-profile').value='';
+  document.getElementById('file-availability').value='';
+  document.getElementById('file-assignment').value='';
+  document.getElementById('file-callup').value='';
+  document.getElementById('status-pill').innerText='Sem arquivos';
+  document.getElementById('log').innerText='';
+  finalRows=[];
+  renderTable([]);
+  document.getElementById('summary-card').style.display='none';
+  log('Arquivos limpos');
+});
+
+function updateStatus(){
+  const c=[profileAOA,availAOA,assignAOA,callupAOA].filter(Boolean).length;
+  document.getElementById('status-pill').innerText=c+' / 4 carregados';
+}
+
+/* ============================
+   PROCESSA RESUMO
+============================ */
+document.getElementById('btn-process').addEventListener('click', ()=>{
+  if(!availAOA) return alert('Carregue o arquivo DISPONIBILIDADE (base).');
+  log('Iniciando processamento...');
+
+  const sheet = availAOA;
+  const headerRow = sheet[0]||[];
+  const hasHeader = headerRow.join(' ').toLowerCase().includes('driver');
+  const startRow = hasHeader?1:0;
+
+  const IDX_DRIVER_ID=0;
+  const IDX_DRIVER_NAME=1;
+  const IDX_CLUSTER=2;
+  const IDX_TURNO=5;
+
+  let IDX_VEHICLE_IN_AVAIL=-1;
+  if(hasHeader){
+    for(let i=0;i<headerRow.length;i++){
+      const h=String(headerRow[i]||'').toLowerCase();
+      if(h.includes('veic')||h.includes('vehicle')||h.includes('tipo')){
+        IDX_VEHICLE_IN_AVAIL=i; break;
+      }
+    }
+  }
+
+  const availMap=[];
+  for(let r=startRow;r<sheet.length;r++){
+    const row=sheet[r]||[];
+    const did=safe(row[IDX_DRIVER_ID]);
+    const dname=safe(row[IDX_DRIVER_NAME]);
+    if(!did&&!dname) continue;
+
+    const rawCluster=safe(row[IDX_CLUSTER]||'');
+    const clusters=rawCluster?rawCluster.split(',').map(s=>s.trim()):[];
+    const clusterCols=[clusters[0]||'',clusters[1]||'',clusters[2]||'',clusters[3]||''];
+
+    const turnoCell=safe(row[IDX_TURNO]||'').replace(/["']/g,'').trim();
+    const vehicleFromAvail=(IDX_VEHICLE_IN_AVAIL>=0)? safe(row[IDX_VEHICLE_IN_AVAIL]):'';
+
+    let disponibilidade='NOK';
+    let turnoArr=[];
+    if(turnoCell.toLowerCase().includes('not available')){
+      disponibilidade='NOK';
+      turnoArr=['NOK'];
+    } else if(turnoCell.includes('--')){
+      disponibilidade='NÃO DISPONÍVEL';
+      turnoArr=['--'];
+    } else {
+      const parts=turnoCell.split(/[,;\n]/).map(s=>s.trim()).filter(Boolean);
+      const tparts=[];
+      for(const p of parts){
+        const m=p.match(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/g);
+        if(m) tparts.push(...m);
+        else if(p.match(/\d{1,2}:\d{2}/)) tparts.push(p);
+      }
+      if(tparts.length>0){
+        turnoArr=tparts;
+        disponibilidade='DISPONÍVEL';
+      }
+    }
+
+    availMap.push({
+      driverId:did,
+      driverName:dname,
+      rawCluster,
+      cluster1:clusterCols[0],
+      cluster2:clusterCols[1],
+      cluster3:clusterCols[2],
+      cluster4:clusterCols[3],
+      turnoCell,
+      turnoArr,
+      disponibilidade,
+      vehicleFromAvail
+    });
+  }
+
+  log('Disponibilidade processada: '+availMap.length+' registros.');
+
+  /* PROFILE LOOKUP */
+  const profileLookup={};
+  if(profileAOA){
+    const ph=profileAOA[0]||[];
+    const hasH=ph.join(' ').toLowerCase().includes('driver');
+    const start=hasH?1:0;
+
+    const findIdx=(names,fallback)=>{
+      if(!hasH) return fallback;
+      for(let i=0;i<ph.length;i++){
+        const hh=String(ph[i]||'').toLowerCase();
+        for(const c of names){
+          if(hh.includes(c)) return i;
+        }
+      }
+      return fallback;
+    };
+
+    const idxId=findIdx(['driver id','driverid'],0);
+    const idxName=findIdx(['driver name'],1);
+    const idxPhone=findIdx(['phone','telefone'],8);
+    const idxVehicle=findIdx(['vehicle','veic'],50);
+    const idxSpx=findIdx(['spx'],51);
+
+    for(let r=start;r<profileAOA.length;r++){
+      const row=profileAOA[r]||[];
+      const id=safe(row[idxId]);
+      if(!id) continue;
+      profileLookup[id]={
+        driverId:id,
+        driverName:safe(row[idxName]),
+        phone:safe(row[idxPhone]),
+        vehicleType:safe(row[idxVehicle]),
+        spx:safe(row[idxSpx])
+      };
+    }
+  }
+
+  /* ASSIGNMENT LOOKUP */
+  const assignByName={};
+  const assignById={};
+  const assignByTask={};
+  if(assignAOA){
+    const start=1;
+    for(let r=start;r<assignAOA.length;r++){
+      const row=assignAOA[r]||[];
+      const taskId=safe(row[0]);
+      const rawName=safe(row[5]);
+      const statusVal=safe(row[20]);
+      const corridor=safe(row[2]);
+
+      const possibleId=safe(row[6]);
+
+      const obj={taskId,rawName,status:statusVal,corridor};
+
+      if(taskId) assignByTask[String(taskId).trim()]=obj;
+      if(rawName) assignByName[normalizeName(rawName)]=obj;
+      if(possibleId) assignById[String(possibleId).trim()]=obj;
+    }
+  }
+
+  /* CALLUP LOOKUP — COM TRATAMENTO DO NOME */
+  const callupByName={};
+  if(callupAOA){
+    const header=callupAOA[0];
+    const hasH=header.join(' ').toLowerCase().includes('decline');
+    const start=hasH?1:0;
+
+    let idxName=3, idxReason=8, idxStatus=9;
+
+    for(let r=start;r<callupAOA.length;r++){
+      const row=callupAOA[r]||[];
+
+      let raw=safe(row[idxName]);
+
+      if(!raw) continue;
+
+      raw = raw.replace(/^\s*\[\d+\]\s*/,'').trim();
+
+      const norm=normalizeName(raw);
+
+      callupByName[norm]={
+        declineReason: safe(row[idxReason]),
+        callStatus: safe(row[idxStatus]),
+        rawName: raw
+      };
+    }
+  }
+
+  /* MONTA RESULTADO FINAL */
+  finalRows=[];
+  for(const a of availMap){
+    const id=a.driverId;
+    const name=a.driverName;
+    const norm=normalizeName(name);
+
+    const prof=profileLookup[id]||{};
+    const assign=assignByName[norm] || assignById[id] || null;
+    const call=callupByName[norm] || null;
+
+    const hasTurno=a.turnoArr && a.turnoArr.length>0;
+    let dispon=a.disponibilidade;
+
+    if(hasTurno){
+      dispon = assign ? 'ESCALADO' : 'DISPONÍVEL S/ ESCALA';
+    }
+
+    const chips = a.turnoArr.length>2
+        ? [a.turnoArr[0],a.turnoArr[1],'...']
+        : a.turnoArr;
+
+    finalRows.push({
+      driverId:id,
+      driverName:name,
+      vehicleType:a.vehicleFromAvail || prof.vehicleType || '',
+      phone:prof.phone||'',
+      spx:prof.spx||'',
+      taskId:assign ? assign.taskId : (hasTurno ? 'Disponível S/ Atribuição' : ''),
+      corridor:assign ? assign.corridor : (hasTurno ? 'Disponível S/ Atribuição' : ''),
+      assignStatus:assign ? assign.status : '',
+      cluster1:a.cluster1,
+      cluster2:a.cluster2,
+      cluster3:a.cluster3,
+      cluster4:a.cluster4,
+      turnoChips:chips,
+      turnoRaw:a.turnoCell,
+      disponibilidade:dispon,
+      declineReason:call ? call.declineReason : '',
+      callStatus:call ? call.callStatus : ''
+    });
+  }
+
+  window.__VAL_DATA=finalRows;
+  populateFilters(finalRows);
+  renderTable(finalRows);
+  document.getElementById('summary-card').style.display='block';
+});
+
+/* ------------ RENDER TABLE ---------------- */
+function renderTable(rows){
+  const tbody=document.getElementById('result-body');
+  tbody.innerHTML='';
+  window.__VAL_LAST_RENDERED=rows.slice();
+
+  if(!rows.length){
+    document.getElementById('empty-note').style.display='block';
+    updateRowCount(0);
+    return;
+  }
+
+  document.getElementById('empty-note').style.display='none';
+
+  for(const r of rows){
+    const chipsHtml=(r.turnoChips||[]).map(t=>{
+      if(t==='...') return '<span class="chip more">...</span>';
+      let cls='chip blue';
+      if(r.disponibilidade==='ESCALADO') cls='chip green';
+      else if(r.disponibilidade==='DISPONÍVEL S/ ESCALA') cls='chip blue';
+      else if(r.disponibilidade==='NÃO DISPONÍVEL') cls='chip gray';
+      else if(r.disponibilidade==='NOK') cls='chip red';
+      return '<span class="'+cls+'">'+escapeHtml(t)+'</span>';
+    }).join(' ');
+
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${escapeHtml(r.driverId)}</td>
+      <td>${escapeHtml(r.driverName)}</td>
+      <td>${escapeHtml(r.vehicleType)}</td>
+      <td>${r.phone?'<a class="whatsapp wh-green" target="_blank" href="'+whatsappLink(r.phone,r.driverName)+'">WA</a> '+escapeHtml(r.phone):''}</td>
+      <td>${escapeHtml(r.spx)}</td>
+      <td>${escapeHtml(r.taskId)}</td>
+      <td>${escapeHtml(r.corridor)}</td>
+      <td>${escapeHtml(r.cluster1)}</td>
+      <td>${escapeHtml(r.cluster2)}</td>
+      <td>${escapeHtml(r.cluster3)}</td>
+      <td>${escapeHtml(r.cluster4)}</td>
+      <td class="chips">${chipsHtml}</td>
+      <td>${escapeHtml(r.disponibilidade)}</td>
+      <td>${escapeHtml(r.assignStatus)}</td>
+      <td>${escapeHtml(r.declineReason)}</td>
+      <td>${escapeHtml(r.callStatus)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  attachFilterEvents();
+  updateRowCount(rows.length);
+}
+
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
+}
+
+function populateFilters(rows){
+  const cluster1s=[...new Set(rows.map(r=>r.cluster1).filter(Boolean))].sort();
+  const vehs=[...new Set(rows.map(r=>r.vehicleType).filter(Boolean))].sort();
+  const spxs=[...new Set(rows.map(r=>r.spx).filter(Boolean))].sort();
+  const assigns=[...new Set(rows.map(r=>r.assignStatus).filter(Boolean))].sort();
+  const turnoSet=new Set();
+  rows.forEach(r=>{
+    if(r.turnoRaw) turnoSet.add(r.turnoRaw);
+    else if(r.turnoChips) r.turnoChips.forEach(t=>t && turnoSet.add(t));
+  });
+  const turnos=[...turnoSet].filter(Boolean).sort();
+
+  document.getElementById('filter-cluster1').innerHTML='<option value="">Cluster 1 (Todos)</option>'+cluster1s.map(c=>`<option>${c}</option>`).join('');
+  document.getElementById('filter-vehicle').innerHTML='<option value="">Vehicle Type</option>'+vehs.map(v=>`<option>${v}</option>`).join('');
+  document.getElementById('filter-spx').innerHTML='<option value="">SPX Status (Todos)</option>'+spxs.map(s=>`<option>${s}</option>`).join('');
+  document.getElementById('filter-assign').innerHTML='<option value="">Status Atribuição</option>'+assigns.map(s=>`<option>${s}</option>`).join('');
+  document.getElementById('filter-turno').innerHTML='<option value="">Turno</option>'+turnos.map(t=>`<option>${t}</option>`).join('');
+}
+
+function attachFilterEvents(){
+  ['filter-cluster1','filter-vehicle','filter-spx','filter-assign','filter-dispo','filter-task','filter-turno']
+    .forEach(id=>{
+      document.getElementById(id).onchange=applyFilters;
+    });
+
+  document.getElementById('search-name').oninput=applyFilters;
+  document.getElementById('search-id').oninput=applyFilters;
+
+  document.getElementById('btn-clear-filters').onclick=()=>{
+    document.querySelectorAll('.filters select, .filters input').forEach(el=>el.value='');
+    applyFilters();
+  };
+}
+
+function applyFilters(){
+  const all=window.__VAL_DATA||[];
+
+  const f=(id)=>document.getElementById(id).value.toLowerCase();
+
+  const name=f('search-name');
+  const idsearch=f('search-id');
+  const fc=f('filter-cluster1');
+  const fv=f('filter-vehicle');
+  const fs=f('filter-spx');
+  const fa=f('filter-assign');
+  const fd=f('filter-dispo');
+  const ft=f('filter-task');
+  const fturno=f('filter-turno');
+
+  const filtered=all.filter(r=>{
+    if(fc && r.cluster1.toLowerCase()!==fc) return false;
+    if(fv && r.vehicleType.toLowerCase()!==fv) return false;
+    if(fs && r.spx.toLowerCase()!==fs) return false;
+    if(fa && r.assignStatus.toLowerCase()!==fa) return false;
+    if(fd && r.disponibilidade.toLowerCase()!==fd) return false;
+
+    if(ft==='has' && (!r.taskId || r.taskId==='Disponível S/ Atribuição')) return false;
+    if(ft==='no' && r.taskId && r.taskId!=='Disponível S/ Atribuição') return false;
+
+    if(fturno){
+      const raw=r.turnoRaw.toLowerCase();
+      const chips=(r.turnoChips||[]).join('|').toLowerCase();
+      if(!raw.includes(fturno) && !chips.includes(fturno)) return false;
+    }
+
+    if(name && !r.driverName.toLowerCase().includes(name)) return false;
+    if(idsearch && !r.driverId.toLowerCase().includes(idsearch)) return false;
+
+    return true;
+  });
+
+  renderTable(filtered);
+}
+
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  const rows=window.__VAL_LAST_RENDERED||[];
+  if(!rows.length) return alert('Nada para exportar');
+
+  const aoa=[['Driver ID','Driver Name','Vehicle Type','Phone','SPX','Task ID','Corridor','Cluster1','Cluster2','Cluster3','Cluster4','Turno','Disponibilidade','Assign Status','Decline Reason','CallUp Status']];
+
+  rows.forEach(r=>{
+    aoa.push([
+      r.driverId, r.driverName, r.vehicleType, r.phone, r.spx,
+      r.taskId, r.corridor, r.cluster1, r.cluster2, r.cluster3, r.cluster4,
+      (r.turnoChips||[]).join(' | '),
+      r.disponibilidade, r.assignStatus, r.declineReason, r.callStatus
+    ]);
+  });
+
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Resumo');
+  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  const blob=new Blob([wbout],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='resumo_validador.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+function updateRowCount(n){
+  document.getElementById('row-count').innerText='Linhas: '+n;
+}
+
+document.getElementById('btn-back').addEventListener('click',()=>{
+  document.getElementById('summary-card').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+</script>
+
+</body>
+</html>
